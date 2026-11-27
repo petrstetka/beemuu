@@ -58,7 +58,9 @@ jobs:
           python -m pytest backend/tests/ -q
       - name: Rust tests on macOS ARM64
         working-directory: src-tauri
-        run: cargo test --locked --target aarch64-apple-darwin
+        # The simulator's sub-second S3 tests depend on wall-clock sleeps.
+        # Serialize tests to reduce scheduling delays on the shared runner.
+        run: cargo test --locked --target aarch64-apple-darwin -- --test-threads=1
       - name: Build app on GitHub
         run: npm run build -- --target aarch64-apple-darwin --bundles app --config src-tauri/tauri.macos-community.conf.json --ci
       - name: Verify, package and record source

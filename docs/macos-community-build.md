@@ -24,8 +24,8 @@ Serial ports on macOS usually have names such as `/dev/cu.usbserial-*`.
 ## Rebuild
 
 Push source changes to `macos-arm64` to run tests and build automatically.
-To use **Run workflow**, GitHub requires the workflow to exist on the default
-branch. Until it is merged there, use the branch's push trigger instead.
+The workflow also accepts manual dispatch on the `macos-arm64` ref, for
+example through `gh workflow run macos-arm64.yml --ref macos-arm64`.
 No upstream changes are merged automatically: review and merge them into
 `macos-arm64` first. No release tag, publishing credential, or updater key is
 required. The workflow has read-only repository permissions and uploads a
