@@ -44,6 +44,7 @@ jobs:
         with:
           workspaces: src-tauri
           key: macos-arm64-community
+          cache-on-failure: true
       - name: Install locked frontend dependencies
         run: npm ci
       - name: Generate macOS icon

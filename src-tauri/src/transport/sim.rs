@@ -739,13 +739,18 @@ mod tests {
     #[test]
     fn tester_present_resets_s3_timer() {
         let mut sim = SimTransport::new();
-        sim.set_s3_timeout(Duration::from_millis(200));
+        sim.set_s3_timeout(Duration::from_secs(5));
         sim.request(0x12, &[0x10, 0x03]).unwrap();
         for _ in 0..8 {
-            std::thread::sleep(Duration::from_millis(100)); // half of S3
+            // Model idle time directly. macOS may coalesce a 100 ms sleep
+            // past a compressed 200 ms S3 deadline, even with serial tests.
+            // Backdating also lets us assert the actual timer refresh.
+            sim.last_diag = Instant::now() - Duration::from_secs(2);
+            let previous_diag = sim.last_diag;
             sim.request(0x12, &[0x3E, 0x00]).unwrap();
+            assert!(sim.last_diag > previous_diag, "tester present must refresh the S3 timer");
+            assert_eq!(sim.current_session(), 0x03, "tester present must keep the session alive");
         }
-        assert_eq!(sim.current_session(), 0x03, "tester present must keep the session alive");
     }
 
     /// The S3 timer never fires while in the default session (there is

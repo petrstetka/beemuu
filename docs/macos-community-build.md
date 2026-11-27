@@ -40,6 +40,9 @@ published macOS updater packages are unavailable. Download later builds
 manually. The original configuration for Windows and Linux is unchanged.
 
 All compilation and the JavaScript, Python, and Rust tests run on GitHub.
+The simulator timer-refresh test models elapsed idle time by backdating its
+test instance's timestamp, avoiding macOS sleep coalescing. No production
+transport or ECU timing is changed.
 The packaging step verifies ARM64 architecture, the app signature, bundled
 community data, and DMG integrity. The matching source archive plus the
 configuration and workflow record how to rebuild the package.
