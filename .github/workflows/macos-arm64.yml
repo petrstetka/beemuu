@@ -1,0 +1,102 @@
+name: macOS ARM64 community build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [macos-arm64]
+    paths:
+      - '.github/workflows/macos-arm64.yml'
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'community/**'
+      - 'scripts/prepare-macos-community.cjs'
+      - 'package*.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-arm64-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: macos-arm64-community
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Generate macOS icon
+        run: npm run tauri -- icon src-tauri/icons/icon.png --output src-tauri/icons
+      - name: JavaScript tests and community data checks
+        run: |
+          node --test "src/js/**/*.test.js" "src/js/**/*.test.cjs" "frontend/**/*.test.js"
+          node scripts/lint-toml.js
+      - name: Python backend tests
+        run: |
+          python -m pip install pytest
+          python -m pytest backend/tests/ -q
+      - name: Rust tests on macOS ARM64
+        working-directory: src-tauri
+        run: cargo test --locked --target aarch64-apple-darwin
+      - name: Build app on GitHub
+        run: npm run build -- --target aarch64-apple-darwin --bundles app --config src-tauri/tauri.macos-community.conf.json --ci
+      - name: Verify, package and record source
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/BeeEmUu.app"
+          binary="$app/Contents/MacOS/beeemuu"
+          test "$(lipo -archs "$binary")" = arm64
+          test -f "$app/Contents/Resources/community/dtc_texts.toml"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent "$app" dist/BeeEmUu-macos-arm64.app.zip
+          mkdir -p "$RUNNER_TEMP/beemuu-dmg"
+          ditto "$app" "$RUNNER_TEMP/beemuu-dmg/BeeEmUu.app"
+          ln -s /Applications "$RUNNER_TEMP/beemuu-dmg/Applications"
+          hdiutil create -volname BeeEmUu -srcfolder "$RUNNER_TEMP/beemuu-dmg" -ov -format UDZO dist/BeeEmUu-macos-arm64.dmg
+          hdiutil verify dist/BeeEmUu-macos-arm64.dmg
+          git archive --format=zip --output=dist/BeeEmUu-source.zip HEAD
+          cp LICENSE dist/LICENSE.txt
+          {
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Source commit: $GITHUB_SHA"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo 'Architecture: arm64; minimum macOS: 12.0'
+            echo 'Community build; ad-hoc signed, not Apple notarized.'
+            echo 'Automatic updates disabled; download future builds manually.'
+            echo 'Simulator and real-car operation require separate runtime validation.'
+            rustc --version
+            node --version
+            xcodebuild -version
+          } > dist/BUILD-INFO.txt
+          (cd dist && shasum -a 256 ./*.zip ./*.dmg > SHA256SUMS.txt)
+          echo 'Download the macOS ARM64 artifact below for the DMG, zipped app, source, and checksums.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload installers and matching source
+        uses: actions/upload-artifact@v4
+        with:
+          name: BeeEmUu-macos-arm64-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30

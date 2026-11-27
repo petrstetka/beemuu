@@ -37,6 +37,8 @@ pub fn find_dir() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             candidates.push(dir.join("community"));
+            #[cfg(target_os = "macos")]
+            candidates.push(dir.join("../Resources/community"));
         }
     }
     candidates.into_iter().find(|p| p.is_dir())
